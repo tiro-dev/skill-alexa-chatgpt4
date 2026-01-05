@@ -17,15 +17,10 @@ A API é paga por uso, ou seja por cada pergunta e resposta é cobrado alguns ce
   - Insira o endereço: https://github.com/alexandremendoncaalvaro/skill-alexa-chatgpt4.git
 
 - Vá na aba "Code"
-- Insira sua chave no código: lambda > lambda_function.py:
-  ```python
-  openai.api_key = "substitua-por-sua-api-key-da-openai"
-  ```
-- Modifique no mesmo arquivo (lambda_function.py) pro modelo de sua preferência:
-  ```python
-  MODEL = "gpt-4"
-  ```
-  Exemplos: "gpt-3.5-turbo", "gpt-4", "gpt-4-1106-preview"  
+- Configure as variáveis de ambiente no console da Alexa:
+  - `OPENAI_API_KEY` com sua chave da OpenAI
+  - `OPENAI_MODEL` com o modelo desejado (ex: `gpt-4o`)
+  - Opcional: `OPENAI_TEMPERATURE`, `OPENAI_MAX_TOKENS`, `OPENAI_TIMEOUT`
   [veja a lista completa de modelos aqui](https://platform.openai.com/docs/models)
 
 - Salve as alterações

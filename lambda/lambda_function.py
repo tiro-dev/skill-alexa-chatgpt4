@@ -1,31 +1,53 @@
-import os
 import logging
+import os
+from typing import List, Dict, Any
+
 import ask_sdk_core.utils as ask_utils
-
-from ask_sdk_core.skill_builder import SkillBuilder
-from ask_sdk_core.dispatch_components import AbstractRequestHandler
 from ask_sdk_core.dispatch_components import AbstractExceptionHandler
+from ask_sdk_core.dispatch_components import AbstractRequestHandler
 from ask_sdk_core.handler_input import HandlerInput
-
+from ask_sdk_core.skill_builder import SkillBuilder
 from ask_sdk_model import Response
-
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-openai_api_key = "SUBSTITUA-POR-SUA-API-KEY-DA-OPENAI"
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+OPENAI_TEMPERATURE = float(os.getenv("OPENAI_TEMPERATURE", "0.6"))
+OPENAI_MAX_TOKENS = int(os.getenv("OPENAI_MAX_TOKENS", "450"))
+OPENAI_TIMEOUT = float(os.getenv("OPENAI_TIMEOUT", "10"))
+MAX_HISTORY_TURNS = int(os.getenv("MAX_HISTORY_TURNS", "6"))
 
-client = OpenAI(api_key=openai_api_key)
+client = OpenAI(api_key=OPENAI_API_KEY, timeout=OPENAI_TIMEOUT)
 
-MODEL = "gpt-4o-mini"
+SYSTEM_PROMPT = (
+    "Você é uma assistente muito útil. Responda de forma clara e concisa em "
+    "Português do Brasil. Use frases curtas, evite jargões e ofereça exemplos "
+    "simples quando fizer sentido."
+)
 
-messages = [
-    {
-        "role": "system",
-        "content": "Você é uma assistente muito útil. Por favor, responda de forma clara e concisa em Português do Brasil.",
-    }
-]
+
+def _base_messages() -> List[Dict[str, str]]:
+    return [{"role": "system", "content": SYSTEM_PROMPT}]
+
+
+def _sanitize_speech(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _get_session_messages(handler_input: HandlerInput) -> List[Dict[str, str]]:
+    session = handler_input.attributes_manager.session_attributes
+    messages = session.get("messages")
+    if not messages:
+        messages = _base_messages()
+    return messages
+
+
+def _store_session_messages(handler_input: HandlerInput, messages: List[Dict[str, str]]):
+    session = handler_input.attributes_manager.session_attributes
+    session["messages"] = messages
 
 
 class LaunchRequestHandler(AbstractRequestHandler):
@@ -36,14 +58,13 @@ class LaunchRequestHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
+        _store_session_messages(handler_input, _base_messages())
         speak_output = (
-            "Bem vindo ao Chat 'Gepetê Quatro' da 'Open ei ai'! Qual a sua pergunta?"
+            "Bem-vindo ao ChatGPT! Faça sua pergunta e eu responderei em português."
         )
 
         return (
-            handler_input.response_builder.speak(speak_output)
-            .ask(speak_output)
-            .response
+            handler_input.response_builder.speak(speak_output).ask(speak_output).response
         )
 
 
@@ -54,29 +75,48 @@ class GptQueryIntentHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
-        query = handler_input.request_envelope.request.intent.slots["query"].value
-        response = generate_gpt_response(query)
+        slots = handler_input.request_envelope.request.intent.slots or {}
+        query_slot = slots.get("query")
+        query = query_slot.value if query_slot else None
+        if not query:
+            speak_output = "Não entendi a pergunta. Você pode repetir?"
+            return (
+                handler_input.response_builder.speak(speak_output)
+                .ask(speak_output)
+                .response
+            )
+
+        response = generate_gpt_response(handler_input, query)
+        response = _sanitize_speech(response)
 
         return (
             handler_input.response_builder.speak(response)
-            .ask("Você pode fazer uma nova pergunta ou falar: sair.")
+            .ask("Você pode fazer outra pergunta ou dizer: sair.")
             .response
         )
 
 
-def generate_gpt_response(query):
+def generate_gpt_response(handler_input: HandlerInput, query: str) -> str:
     try:
-        messages.append(
-            {"role": "user", "content": query},
-        )
+        if not OPENAI_API_KEY:
+            return "A chave da OpenAI não está configurada. Ajuste a variável OPENAI_API_KEY."
+
+        messages = _get_session_messages(handler_input)
+        messages.append({"role": "user", "content": query})
+        messages = messages[:1] + messages[-(MAX_HISTORY_TURNS * 2) :]
         response = client.chat.completions.create(
-            model=MODEL, messages=messages, max_tokens=700, temperature=0.8
+            model=OPENAI_MODEL,
+            messages=messages,
+            max_tokens=OPENAI_MAX_TOKENS,
+            temperature=OPENAI_TEMPERATURE,
         )
         reply = response.choices[0].message.content
         messages.append({"role": "assistant", "content": reply})
+        _store_session_messages(handler_input, messages)
         return reply
     except Exception as e:
-        return f"Erro ao gerar resposta: {str(e)}"
+        logger.error("Erro ao gerar resposta", exc_info=True)
+        return "Tive um problema para responder agora. Tente novamente em alguns segundos."
 
 
 class HelpIntentHandler(AbstractRequestHandler):
@@ -86,12 +126,10 @@ class HelpIntentHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
-        speak_output = "Como posso te ajudar?"
+        speak_output = "Diga sua pergunta, por exemplo: como funciona a fotossíntese."
 
         return (
-            handler_input.response_builder.speak(speak_output)
-            .ask(speak_output)
-            .response
+            handler_input.response_builder.speak(speak_output).ask(speak_output).response
         )
 
 
@@ -122,6 +160,19 @@ class SessionEndedRequestHandler(AbstractRequestHandler):
         return handler_input.response_builder.response
 
 
+class FallbackIntentHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        # type: (HandlerInput) -> bool
+        return ask_utils.is_intent_name("AMAZON.FallbackIntent")(handler_input)
+
+    def handle(self, handler_input):
+        # type: (HandlerInput) -> Response
+        speak_output = "Não entendi. Faça uma pergunta ou diga: ajuda."
+        return (
+            handler_input.response_builder.speak(speak_output).ask(speak_output).response
+        )
+
+
 class CatchAllExceptionHandler(AbstractExceptionHandler):
     def can_handle(self, handler_input, exception):
         # type: (HandlerInput, Exception) -> bool
@@ -147,6 +198,7 @@ sb.add_request_handler(GptQueryIntentHandler())
 sb.add_request_handler(HelpIntentHandler())
 sb.add_request_handler(CancelOrStopIntentHandler())
 sb.add_request_handler(SessionEndedRequestHandler())
+sb.add_request_handler(FallbackIntentHandler())
 
 sb.add_exception_handler(CatchAllExceptionHandler())
 

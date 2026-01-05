@@ -15,6 +15,10 @@
           "samples": []
         },
         {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        },
+        {
           "name": "AMAZON.NavigateHomeIntent",
           "samples": []
         },
@@ -22,7 +26,7 @@
           "slots": [
             {
               "name": "query",
-              "type": "AMAZON.Person"
+              "type": "AMAZON.SearchQuery"
             }
           ],
           "name": "GptQueryIntent",

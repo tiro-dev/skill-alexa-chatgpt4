@@ -13,12 +13,12 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
-OPENAI_TEMPERATURE = float(os.getenv("OPENAI_TEMPERATURE", "0.6"))
-OPENAI_MAX_TOKENS = int(os.getenv("OPENAI_MAX_TOKENS", "450"))
-OPENAI_TIMEOUT = float(os.getenv("OPENAI_TIMEOUT", "10"))
-MAX_HISTORY_TURNS = int(os.getenv("MAX_HISTORY_TURNS", "6"))
+OPENAI_API_KEY = "<YOUR_OPENAI_API_KEY>"  # Substitua pela sua chave da OpenAI
+OPENAI_MODEL = "<YOUR_OPENAI_MODEL>"  # Substitua pelo modelo desejado, ex: "gpt-5.2"
+OPENAI_TEMPERATURE = "<YOUR_OPENAI_TEMPERATURE>"  # Substitua pela temperatura desejada, ex: "0.7"
+OPENAI_MAX_TOKENS = "<YOUR_OPENAI_MAX_TOKENS>"  # Substitua pelo número máximo de tokens, ex: "150"
+OPENAI_TIMEOUT = "<YOUR_OPENAI_TIMEOUT>"  # Substitua pelo timeout desejado em segundos, ex: "10"
+MAX_HISTORY_TURNS = "<YOUR_MAX_HISTORY_TURNS>"  # Substitua pelo número máximo de turnos de histórico, ex: "5"
 
 client = OpenAI(api_key=OPENAI_API_KEY, timeout=OPENAI_TIMEOUT)
 
@@ -60,7 +60,7 @@ class LaunchRequestHandler(AbstractRequestHandler):
         # type: (HandlerInput) -> Response
         _store_session_messages(handler_input, _base_messages())
         speak_output = (
-            "Bem-vindo ao ChatGPT! Faça sua pergunta e eu responderei em português."
+            "Aqui é o ChatGPT, estou à sua disposição."
         )
 
         return (
@@ -107,7 +107,7 @@ def generate_gpt_response(handler_input: HandlerInput, query: str) -> str:
         response = client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=messages,
-            max_tokens=OPENAI_MAX_TOKENS,
+            max_completion_tokens=OPENAI_MAX_TOKENS,
             temperature=OPENAI_TEMPERATURE,
         )
         reply = response.choices[0].message.content
